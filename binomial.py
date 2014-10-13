@@ -1,7 +1,7 @@
 import math
 
-
-trinomial = False
+TOTAL_TIME = 10
+NUM_STEPS = 10
 
 class BNode:
     def __init__(self):
@@ -17,10 +17,10 @@ class BNode:
         self.children.append(child)
 
 class BiTree:
-    def __init__(self, price):
+    def __init__(self, price, sigma):
         self.price = price
         self.head = self.first_node(price)
-        self.sigma = 0.005303
+        self.sigma = sigma
         price_move_list = calc_price_move(self.sigma)
         self.gen_children([self.head], price_move_list, 0)
 
@@ -39,6 +39,21 @@ class BiTree:
         print self.head.price
         self.printer_helper(self.head.children)
 
+    def get_impotent_children(self, nodes):
+        impotence_list = []
+        for node in nodes:
+            if node.children == []:
+                impotence_list.append(node)
+            else:
+                impotence_list.extend(self.get_impotent_children(node.children))
+        return impotence_list
+
+
+
+    def apply_to_youngest_children(self, fn):
+        list_of_children = []
+
+
     def apply_to_all_nodes_price(self, fn):
         list_of_children = []
         list_of_children.append(self.head)
@@ -47,6 +62,8 @@ class BiTree:
             list_of_children.extend(list_of_children[0].children)
             list_of_children = list_of_children[1:]
 
+
+    # TODO: this function needs some cleenup
     def gen_children(self, bnode_list, price_move_list, count):
         first = 0
         next_list = []
@@ -58,7 +75,6 @@ class BiTree:
                 self.add_children(price_move_list[1:], new_head)
             next_list.extend(new_head.children)
         count += 1
-        # if count < 16:
         if count < 10:
             self.gen_children(next_list, price_move_list, count)
 
@@ -68,52 +84,51 @@ class BiTree:
         return parent_node
 
     def add_children(self, price_move_list, parent):
-        if trinomial == True:
-            self.add_children_trinomial(price_move_list, parent)
-            return 
-        else:
-            for price_move in price_move_list:
-                child = BNode()
-                child_price = round(parent.price * price_move, 5)
-                child.initialize(parent, child_price)
-                parent.add_child(child) 
-
-    def add_children_trinomial(self, price_move_list, parent):
-        count = 0
         for price_move in price_move_list:
             child = BNode()
             child_price = round(parent.price * price_move, 5)
             child.initialize(parent, child_price)
             parent.add_child(child) 
-            if count == 0:
-                child = BNode()
-                child_price = parent.price
-                child.initialize(parent, child_price)
-                parent.add_child(child)
-                count += 1
 
+# p = interest_rate - move_down / (move_up - move_down)
+# if we are including dividend yield, we use interest_rate = 
+# (interest_rate / div_yield)
+def binomial_method(list_of_values, p, interest_rate):
+    new_list = []
+    for i in range(len(list_of_values) - 1):
+        new_value = (p * list_of_values[i+1] + (1.0 - p) * list_of_values[i]) / interest_rate
+        new_list.append(new_value)
+    return new_list
 
-
-# This function is meant to calculate u and d based on sigma. 
-# The formula should be: u = move_up = e^(sigma*sqrt(T/n)) where T is the 
-# total time (lets say in days) and n is the number of steps. 
-# If we were only taking 2 steps in the tree over a 1 day period, u = move_up
-# = e^(sigma*sqrt(1/2))
-# but the quants are using the approximation below. 
 
 def calc_price_move(sigma):
-    move_up = (1 + sigma)
-    move_down = (1 - sigma)
+    move_up = math.exp(sigma * math.sqrt(TOTAL_TIME / NUM_STEPS))
+    move_down = 1.0 / move_up
     return [move_down, move_up]
 
 def main():
-    tree = BiTree(100)
+    sigma = 0.005303
+    initial_price = 100.0
+    strike = 20.0
+    interest_rate = 1.01
+    tree = BiTree(initial_price, sigma)
     head_list = [tree.head]
     tree.printer()
-    def dumb(price, k=20):
-        return  price - k
-    tree.apply_to_all_nodes_price(dumb)
-    tree.printer()
+    get_intrinsic_value = lambda price: price - strike
+
+    impotence_list = tree.get_impotent_children([tree.head])
+    impotence_list = map(lambda x: x.price, impotence_list)
+    impotence_list = map(get_intrinsic_value, impotence_list)
+    
+
+
+    temp = calc_price_move(sigma)
+    p = (interest_rate - temp[0]) / (temp[1] - temp[0])
+    new_list = binomial_method(impotence_list, p, interest_rate)
+    while len(new_list) > 1:
+        new_list = binomial_method(new_list, p, interest_rate)
+    print new_list[0]
+
 
 if __name__ == "__main__":
     main()
